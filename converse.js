@@ -173,6 +173,7 @@
         Strophe.log = function (level, msg) { converse.log(level+' '+msg, level); };
         Strophe.error = function (msg) { converse.log(msg, 'error'); };
 
+
         // Add Strophe Namespaces
         Strophe.addNamespace('CHATSTATES', 'http://jabber.org/protocol/chatstates');
         Strophe.addNamespace('REGISTER', 'jabber:iq:register');
@@ -261,6 +262,7 @@
             jid: undefined,
             keepalive: false,
             message_carbons: false,
+            messages_storage: 'session',
             no_trimming: false, // Set to true for phantomjs tests (where browser apparently has no width)
             play_sounds: false,
             prebind: false,
@@ -721,7 +723,7 @@
                 var height = converse.applyHeightResistance(this.get('height'));
                 if (this.get('box_id') !== 'controlbox') {
                     this.messages = new converse.Messages();
-                    this.messages.browserStorage = new Backbone.BrowserStorage[converse.storage](
+                    this.messages.browserStorage = new Backbone.BrowserStorage[converse.messages_storage](
                         b64_sha1('converse.messages'+this.get('jid')+converse.bare_jid));
                     this.save({
                         // The chat_state will be set to ACTIVE once the chat box is opened
@@ -897,7 +899,7 @@
                         $message.find(INACTIVE).length && INACTIVE ||
                         $message.find(ACTIVE).length && ACTIVE ||
                         $message.find(GONE).length && GONE,
-                    stamp, time, sender, from, createMessage;
+                    stamp, time, sender, from, createMessage, messageParameters;
 
                 if (is_groupchat) {
                     from = Strophe.unescapeNode(Strophe.getResourceFromJid($message.attr('from')));
@@ -916,20 +918,23 @@
                 } else {
                     sender = 'them';
                 }
-                if (!body) {
-                    createMessage = this.messages.add;
-                } else {
-                    createMessage = this.messages.create;
+                createMessage = this.messages.create;
+                messageParameters = {
+                        chat_state: chat_state,
+                        delayed: delayed,
+                        fullname: fullname,
+                        message: body || undefined,
+                        msgid: msgid,
+                        sender: sender,
+                        time: time
+                    };
+                try {
+                    createMessage(messageParameters);
+                } catch(e) {
+                    if (e.name && e.name === 'QuotaExceededError')
+                        this.messages.browserStorage._clear();
+                    createMessage(messageParameters);
                 }
-                this.messages.create({
-                    chat_state: chat_state,
-                    delayed: delayed,
-                    fullname: fullname,
-                    message: body || undefined,
-                    msgid: msgid,
-                    sender: sender,
-                    time: time
-                });
             },
 
             receiveMessage: function ($message) {
