@@ -262,7 +262,7 @@
             jid: undefined,
             keepalive: false,
             message_carbons: false,
-            messages_storage: 'session',
+            message_storage: 'local',
             no_trimming: false, // Set to true for phantomjs tests (where browser apparently has no width)
             play_sounds: false,
             prebind: false,
@@ -723,8 +723,13 @@
                 var height = converse.applyHeightResistance(this.get('height'));
                 if (this.get('box_id') !== 'controlbox') {
                     this.messages = new converse.Messages();
-                    this.messages.browserStorage = new Backbone.BrowserStorage[converse.messages_storage](
-                        b64_sha1('converse.messages'+this.get('jid')+converse.bare_jid));
+                    try {
+                        this.messages.browserStorage = new Backbone.BrowserStorage[converse.message_storage](
+                            b64_sha1('converse.messages'+this.get('jid')+converse.bare_jid));
+                    } catch( error ) {
+                        this.messages.browserStorage = new Backbone.BrowserStorage[converse.storage](
+                            b64_sha1('converse.messages'+this.get('jid')+converse.bare_jid));
+                    }
                     this.save({
                         // The chat_state will be set to ACTIVE once the chat box is opened
                         // and we listen for change:chat_state, so shouldn't set it to ACTIVE here.
@@ -933,7 +938,13 @@
                 } catch(e) {
                     if (e.name && e.name === 'QuotaExceededError')
                         this.messages.browserStorage._clear();
-                    createMessage(messageParameters);
+                    try {
+                        createMessage(messageParameters);
+                    } catch( e2 ) {
+                        if ( e2.name && e2.name === 'QuotaExceededError' )
+                            this.messages.browserStorage.browserStorage().local.clear();
+                        createMessage(messageParameters);
+                    }
                 }
             },
 
